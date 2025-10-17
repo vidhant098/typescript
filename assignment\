@@ -1,0 +1,151 @@
+
+import React, { useEffect, useState, useRef } from "react";
+import { PrimeReactProvider } from "primereact/api";
+import { DataTable, DataTablePageEvent } from "primereact/datatable";
+import { Column } from "primereact/column";
+import { InputSwitch } from "primereact/inputswitch";
+import { Button } from "primereact/button";
+import { OverlayPanel } from "primereact/overlaypanel";
+
+import "primereact/resources/themes/lara-light-cyan/theme.css";
+import "primereact/resources/primereact.min.css";
+import "primeicons/primeicons.css";
+
+interface Artwork {
+  id: number;
+  title: string;
+  place_of_origin: string;
+  artist_display: string;
+  inscriptions: string;
+  date_start: number; 
+  
+}
+
+const App: React.FC = () => {
+  const [products, setProducts] = useState<Artwork[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState<Artwork[]>([]);
+  const [rowClick, setRowClick] = useState(true);
+  const [page, setPage] = useState<number>(1);
+
+  const [autoSelectCount, setAutoSelectCount] = useState(1);
+  const op = useRef<OverlayPanel>(null);
+
+  // ---------------- Fetch Data ----------------
+  const fetchData = (pageNum: number) => {
+    setLoading(true);
+    fetch(`https://api.artic.edu/api/v1/artworks?page=${pageNum}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setProducts(data.data);
+        setTotalRecords(data.pagination.total);
+      })
+      .catch((err) => console.error("Error fetching data:", err))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchData(page);
+  }, [page]);
+
+  // ---------------- Auto Select Rows ----------------
+  const autoSelectRows = (count: number) => {
+    let selected = [...selectedProducts];
+    let remaining = count;
+    let index = 0;
+
+    while (remaining > 0 && index < products.length) {
+      const current = products[index];
+      if (!selected.some((item) => item.id === current.id)) {
+        selected.push(current);
+        remaining--;
+      }
+      index++;
+    }
+
+    // ✅ Fixed line (removed `=`)
+    setSelectedProducts(selected);
+
+    // Load more pages if needed
+    if (remaining > 0 && page * 10 < totalRecords) {
+      setPage((prev) => prev + 1);
+      setTimeout(() => autoSelectRows(remaining), 200);
+    }
+  };
+
+  // ---------------- Render ----------------
+  return (
+    <div>
+      <div className="flex justify-content-center align-items-center mb-4 gap-2">
+        <InputSwitch checked={rowClick} onChange={(e) => setRowClick(e.value)} />
+        <label>Row Click</label>
+      </div>
+
+      <div style={{ marginBottom: "15px" }}>
+        <Button
+          icon="pi pi-chevron-down"
+          className="p-button-text"
+          onClick={(e) => op.current?.toggle(e)}
+          aria-label="Show Selection Panel"
+        />
+
+        <OverlayPanel ref={op} showCloseIcon style={{ width: "250px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <label>Number of rows to auto-select:</label>
+            <input
+              type="number"
+              min={1}
+              value={autoSelectCount}
+              onChange={(e) => setAutoSelectCount(Number(e.target.value))}
+            />
+            <Button
+              label="Submit"
+              onClick={() => {
+                autoSelectRows(autoSelectCount);
+                op.current?.hide();
+              }}
+            />
+            <div>
+              <strong>Currently Selected:</strong> {selectedProducts.length}
+            </div>
+          </div>
+        </OverlayPanel>
+      </div>
+
+      <div className="card">
+  
+<DataTable
+  value={products}
+  paginator
+  rows={10}
+  totalRecords={totalRecords}
+  lazy
+  first={((page ?? 1) - 1) * 10}
+  onPage={(e: DataTablePageEvent) => setPage((e.page ?? 0) + 1)}
+  selectionMode={rowClick ? undefined : "checkbox"}
+  tableStyle={{ minWidth: "40rem" }}
+  loading={loading}
+  selection={selectedProducts}
+  onSelectionChange={(e: { value: Artwork[]; }) => setSelectedProducts(e.value as Artwork[])}
+  dataKey="id"
+  paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+  rowsPerPageOptions={[10, 25, 50]}  
+  
+
+>
+
+          {!rowClick && <Column selectionMode="multiple" headerStyle={{ width: "4rem" }} />}
+          <Column field="title" header="Title" />
+          <Column field="place_of_origin" header="Origin" />
+          <Column field="artist_display" header="Artist" />
+          <Column field="inscriptions" header="Inscriptions" />
+          <Column field="date_start" header="Date" />
+        </DataTable>
+      </div> 
+      </div>
+   
+  );
+};
+
+export default App;
